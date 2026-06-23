@@ -50,32 +50,32 @@ def recommend_listing(
     inventory = context.inventory_by_industry.get(abs_industry)
 
     score = 55
-    reasons: list[str] = [f"Mapped to ABS {abs_industry}."]
+    signals: list[str] = []
 
     if sales is not None:
         score += sales * 8
-        reasons.append(f"Sales changed {sales:+.1f}% q/q.")
+        signals.append(_sales_signal(sales))
     if profit is not None:
         score += profit * 3
-        reasons.append(f"Operating profit changed {profit:+.1f}% q/q.")
+        signals.append(_profit_signal(profit))
     if wages is not None:
         wage_penalty = max(wages - 1.0, 0) * 2
         score -= wage_penalty
-        reasons.append(f"Wages changed {wages:+.1f}% q/q.")
+        signals.append(_wage_signal(wages))
     if inventory is not None:
         score += inventory * 1
-        reasons.append(f"Inventories changed {inventory:+.1f}% q/q.")
+        signals.append(_inventory_signal(inventory))
 
     if listing.price_min is not None and listing.price_min <= 150_000:
         score += 4
-        reasons.append("Lower entry price improves screenability.")
+        signals.append("The lower advertised entry price makes this easier to screen quickly.")
     elif listing.is_poa:
         score -= 3
-        reasons.append("P.O.A reduces price transparency.")
+        signals.append("The P.O.A. price means extra diligence is needed before comparing value.")
 
     return ListingRecommendation(
         score=max(0, min(100, round(score))),
-        reason=" ".join(reasons),
+        reason=_recommendation_reason(abs_industry, signals),
         abs_industry=abs_industry,
     )
 
@@ -105,6 +105,57 @@ def _load_indicator_table(db: Session, title_prefix: str) -> dict[str, float]:
         if isinstance(value, int | float):
             values[row.label] = float(value)
     return values
+
+
+def _recommendation_reason(abs_industry: str, signals: list[str]) -> str:
+    if not signals:
+        return (
+            f"This opportunity sits in {abs_industry}. ABS data has limited fresh movement "
+            "signals for this industry, so treat the score as a neutral starting point."
+        )
+
+    summary = " ".join(signals[:3])
+    if len(signals) > 3:
+        summary = f"{summary} {signals[3]}"
+    return f"This opportunity appears closest to {abs_industry}. {summary}"
+
+
+def _sales_signal(value: float) -> str:
+    if value >= 1.0:
+        return "Recent sales growth suggests demand is improving in this market."
+    if value > 0:
+        return "Sales are slightly positive, which points to steady but modest demand."
+    if value <= -1.0:
+        return "Sales have softened, so revenue resilience should be checked carefully."
+    return "Sales are broadly flat, so the individual business performance matters more."
+
+
+def _profit_signal(value: float) -> str:
+    if value >= 5.0:
+        return "Profit momentum is strong, which is a positive sector signal."
+    if value > 0:
+        return "Profit is moving in the right direction, adding some confidence."
+    if value <= -5.0:
+        return "Sector profit is under pressure, so margins deserve close review."
+    return "Profit has weakened slightly, making margin quality important."
+
+
+def _wage_signal(value: float) -> str:
+    if value >= 2.0:
+        return "Wage costs are rising, which may pressure margins for labour-heavy operators."
+    if value > 0:
+        return "Wage growth looks manageable, but staffing costs still need checking."
+    return "Wage pressure is low in the latest ABS data, which may help operating margins."
+
+
+def _inventory_signal(value: float) -> str:
+    if value >= 2.0:
+        return "Inventory is building, which can support sales but may tie up cash."
+    if value > 0:
+        return "Inventory is growing modestly, suggesting operators are preparing for demand."
+    if value <= -2.0:
+        return "Inventory has fallen, which may indicate cautious demand or tighter stock control."
+    return "Inventory is slightly lower, so stock-dependent businesses need closer review."
 
 
 def _map_listing_to_abs_industry(listing: BusinessListing) -> str | None:

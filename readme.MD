@@ -117,3 +117,19 @@ The AI is guided by a 6-criteria scoring model (profitability 25%, demand 20%, r
 - [Recommendation Strategy](docs/recommendation.md) — AI-powered scoring using scraped ABS business indicators as context
 - [SEEK Business Context](docs/seek_business_context.md) — Marketplace research
 - [API README](api/README.md) — Backend setup and endpoints
+
+## Next Steps / Improvements
+
+While ABS data scraping is implemented, the following public Australian data sources are not yet integrated and would strengthen the recommendation engine:
+
+| Data Source | Status | Value for scoring |
+|---|---|---|
+| **ABS Business Indicators** | Done | Quarterly profit, sales, wage, inventory trends by industry |
+| **ABS Australian Industry** | Done | Annual industry financials — profit, EBITDA, sales income, capex |
+| **ATO Small Business Benchmarks** | Not started | ~100 industry cost ratios (labour/turnover, rent/turnover) — detects abnormal listing financials |
+| **ASIC Insolvency Statistics** | Not started | Insolvency rates by industry and state — risk scoring input |
+| **ABS Counts of Australian Businesses** | Not started | Entry/exit rates, survival rates, business density — competition saturation |
+| **ABS Household Spending** | Not started | Monthly spending by category — demand growth signal |
+| **ABS Population / Regional Data** | Not started | Population growth, income levels by LGA — location attractiveness |
+
+Integrating these would allow the AI to score all six criteria (profitability, demand, risk, competition, capital fit, listing quality) with real data rather than relying on the current two ABS releases + AI inference alone.

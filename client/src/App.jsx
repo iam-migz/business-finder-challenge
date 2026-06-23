@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { Fragment, useEffect, useMemo, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import {
   flexRender,
@@ -9,8 +9,10 @@ import {
 } from "@tanstack/react-table"
 import {
   ArrowUpDown,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
   Download,
   ExternalLink,
   Filter,
@@ -105,6 +107,8 @@ function App() {
   const [state, setState] = useState(ALL_VALUE)
   const [opportunityType, setOpportunityType] = useState(ALL_VALUE)
   const [search, setSearch] = useState("")
+  const [expandedSeekId, setExpandedSeekId] = useState(null)
+  const [showRecommendationInfo, setShowRecommendationInfo] = useState(false)
 
   const categoriesQuery = useQuery({
     queryKey: ["categories"],
@@ -133,6 +137,15 @@ function App() {
       queryClient.invalidateQueries({ queryKey: ["abs-releases"] })
     },
   })
+
+  const { mutate: refreshAbs, isPending: isRefreshingAbs } = absScrapeMutation
+
+  useEffect(() => {
+    if (!absQuery.isSuccess || isRefreshingAbs) return
+    if ((absQuery.data?.count ?? 0) > 0) return
+
+    refreshAbs()
+  }, [absQuery.data?.count, absQuery.isSuccess, isRefreshingAbs, refreshAbs])
 
   const listingsPath = buildListingsPath({ category, state, opportunityType, search })
   const listingsQuery = useQuery({
@@ -344,6 +357,7 @@ function App() {
     setState(ALL_VALUE)
     setOpportunityType(ALL_VALUE)
     setSearch("")
+    setExpandedSeekId(null)
   }
 
   const exportCsv = () => {
@@ -392,11 +406,11 @@ function App() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => absScrapeMutation.mutate()}
-                disabled={absScrapeMutation.isPending}
+                onClick={() => refreshAbs()}
+                disabled={isRefreshingAbs}
               >
                 <RefreshCcw />
-                {absScrapeMutation.isPending ? "Refreshing ABS" : "Refresh ABS"}
+                {isRefreshingAbs ? "Refreshing ABS" : "Refresh ABS"}
               </Button>
               <Button variant="outline" size="sm" onClick={() => listingsQuery.refetch()}>
                 <RefreshCcw />
@@ -471,6 +485,35 @@ function App() {
             </div>
           </div>
 
+          <section className="mb-4 rounded-lg border border-neutral-200 bg-white text-sm text-neutral-600">
+            <button
+              type="button"
+              className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
+              onClick={() => setShowRecommendationInfo((value) => !value)}
+            >
+              <span className="font-semibold text-neutral-950">How recommendations work</span>
+              {showRecommendationInfo ? (
+                <ChevronUp className="size-4 text-neutral-500" aria-hidden="true" />
+              ) : (
+                <ChevronDown className="size-4 text-neutral-500" aria-hidden="true" />
+              )}
+            </button>
+            {showRecommendationInfo ? (
+              <div className="grid gap-4 border-t border-neutral-200 px-4 py-4 lg:grid-cols-2">
+                <p className="leading-6">
+                  ABS means the Australian Bureau of Statistics. We use its Business Indicators
+                  release as market context, especially industry-level movements in sales, operating
+                  profit, wages, and inventories.
+                </p>
+                <p className="leading-6">
+                  Each listing is matched to the closest ABS industry group, then scored from those
+                  market signals plus listing details such as price visibility and entry cost. The
+                  score is an initial screening aid, not a valuation or final investment decision.
+                </p>
+              </div>
+            ) : null}
+          </section>
+
           <div className="overflow-hidden rounded-lg border border-neutral-200 bg-white">
             <div className="flex items-center justify-between gap-3 border-b border-neutral-200 px-4 py-3 text-sm text-neutral-500">
               <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
@@ -479,6 +522,7 @@ function App() {
                   {table.getFilteredRowModel().rows.length.toLocaleString("en-AU")} loaded rows,
                   {total.toLocaleString("en-AU")} matching records
                 </span>
+                <span>Click a row to view the full recommendation and listing details.</span>
                 {absSummary ? (
                   <span>
                     ABS context: {absSummary.count} releases, {absSummary.table_count} tables
@@ -511,15 +555,116 @@ function App() {
                       </td>
                     </tr>
                   ) : table.getRowModel().rows.length ? (
-                    table.getRowModel().rows.map((row) => (
-                      <tr key={row.id} className="border-t border-neutral-100">
-                        {row.getVisibleCells().map((cell) => (
-                          <td key={cell.id} className="px-4 py-4 align-middle text-neutral-700">
-                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                          </td>
-                        ))}
-                      </tr>
-                    ))
+                    table.getRowModel().rows.map((row) => {
+                      const isExpanded = expandedSeekId === row.original.seek_id
+                      return (
+                        <Fragment key={row.id}>
+                          <tr
+                            key={row.id}
+                            className={`cursor-pointer border-t border-neutral-100 transition hover:bg-neutral-50 ${
+                              isExpanded ? "bg-neutral-50" : ""
+                            }`}
+                            onClick={() =>
+                              setExpandedSeekId(isExpanded ? null : row.original.seek_id)
+                            }
+                          >
+                            {row.getVisibleCells().map((cell) => (
+                              <td key={cell.id} className="px-4 py-4 align-middle text-neutral-700">
+                                {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                              </td>
+                            ))}
+                          </tr>
+                          {isExpanded ? (
+                            <tr className="border-t border-neutral-100 bg-neutral-50">
+                              <td colSpan={columns.length} className="px-4 py-5">
+                                <div className="grid gap-5 text-sm lg:grid-cols-[1.2fr_0.8fr]">
+                                  <section>
+                                    <div className="mb-2 flex items-center gap-2">
+                                      <span className="rounded-md bg-neutral-950 px-2 py-1 text-xs font-semibold text-white">
+                                        Score {row.original.recommendation_score ?? "-"}
+                                      </span>
+                                      {row.original.recommendation_abs_industry ? (
+                                        <span className="text-xs font-medium text-neutral-500">
+                                          ABS: {row.original.recommendation_abs_industry}
+                                        </span>
+                                      ) : null}
+                                    </div>
+                                    <h3 className="font-semibold text-neutral-950">
+                                      Recommendation
+                                    </h3>
+                                    <p className="mt-2 leading-6 text-neutral-700">
+                                      {row.original.recommendation_reason ||
+                                        "No recommendation context available."}
+                                    </p>
+                                    <h3 className="mt-5 font-semibold text-neutral-950">
+                                      Listing Summary
+                                    </h3>
+                                    <p className="mt-2 leading-6 text-neutral-700">
+                                      {row.original.summary || "No summary captured."}
+                                    </p>
+                                  </section>
+
+                                  <section className="grid gap-3 rounded-lg border border-neutral-200 bg-white p-4">
+                                    <div>
+                                      <div className="text-xs font-medium uppercase text-neutral-500">
+                                        Advertiser
+                                      </div>
+                                      <div className="mt-1 text-neutral-900">
+                                        {row.original.business_name || "Unknown"}
+                                        {row.original.client_type
+                                          ? ` (${row.original.client_type})`
+                                          : ""}
+                                      </div>
+                                    </div>
+                                    <div>
+                                      <div className="text-xs font-medium uppercase text-neutral-500">
+                                        Category
+                                      </div>
+                                      <div className="mt-1 text-neutral-900">
+                                        {row.original.category} / {row.original.industry}
+                                      </div>
+                                    </div>
+                                    <div>
+                                      <div className="text-xs font-medium uppercase text-neutral-500">
+                                        Location
+                                      </div>
+                                      <div className="mt-1 text-neutral-900">
+                                        {row.original.location}
+                                        {row.original.state ? `, ${row.original.state}` : ""}
+                                      </div>
+                                    </div>
+                                    <div>
+                                      <div className="text-xs font-medium uppercase text-neutral-500">
+                                        Investment
+                                      </div>
+                                      <div className="mt-1 text-neutral-900">
+                                        {row.original.price_min && row.original.price_max
+                                          ? row.original.price_min === row.original.price_max
+                                            ? formatCurrency(row.original.price_min)
+                                            : `${formatCurrency(row.original.price_min)} - ${formatCurrency(
+                                                row.original.price_max,
+                                              )}`
+                                          : "P.O.A"}
+                                      </div>
+                                    </div>
+                                    <a
+                                      className="inline-flex items-center gap-1.5 text-sm font-medium text-neutral-950 underline-offset-3 hover:underline"
+                                      href={row.original.url}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      onClick={(event) => event.stopPropagation()}
+                                    >
+                                      Open source listing
+                                      <ExternalLink className="size-3.5" aria-hidden="true" />
+                                    </a>
+                                  </section>
+                                </div>
+                              </td>
+                            </tr>
+                          ) : null}
+                        </Fragment>
+                      )
+                    })
                   ) : (
                     <tr>
                       <td className="px-4 py-10 text-center text-neutral-500" colSpan={columns.length}>
