@@ -1,3 +1,5 @@
+Target Site: https://www.seekbusiness.com.au/
+
 # Technical Assessment: AI-Powered Business Opportunity Finder
 
 **Position:** Developer Candidate (Trial)
