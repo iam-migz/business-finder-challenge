@@ -165,6 +165,40 @@ function App() {
   const columns = useMemo(
     () => [
       {
+        accessorKey: "recommendation_score",
+        header: ({ column }) => <SortButton column={column}>Score</SortButton>,
+        cell: ({ getValue }) => {
+          const score = getValue()
+          return (
+            <div className="flex items-center gap-2">
+              <div className="h-1.5 w-16 rounded-full bg-neutral-100">
+                <div
+                  className="h-1.5 rounded-full bg-neutral-950"
+                  style={{ width: `${score ?? 0}%` }}
+                />
+              </div>
+              <span className="w-8 text-sm font-semibold text-neutral-950">{score ?? "-"}</span>
+            </div>
+          )
+        },
+      },
+      {
+        accessorKey: "recommendation_reason",
+        header: "Recommendation",
+        cell: ({ row }) => (
+          <div className="max-w-[320px]">
+            <div className="line-clamp-3 text-xs leading-5 text-neutral-600">
+              {row.original.recommendation_reason || "No recommendation context available."}
+            </div>
+            {row.original.recommendation_abs_industry ? (
+              <div className="mt-1 text-xs font-medium text-neutral-500">
+                ABS: {row.original.recommendation_abs_industry}
+              </div>
+            ) : null}
+          </div>
+        ),
+      },
+      {
         accessorKey: "title",
         header: ({ column }) => <SortButton column={column}>Opportunity</SortButton>,
         cell: ({ row }) => (
@@ -277,7 +311,7 @@ function App() {
     getPaginationRowModel: getPaginationRowModel(),
     initialState: {
       pagination: { pageSize: 12 },
-      sorting: [{ id: "refresh_date", desc: true }],
+      sorting: [{ id: "recommendation_score", desc: true }],
     },
   })
 

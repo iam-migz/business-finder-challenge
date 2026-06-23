@@ -89,9 +89,14 @@ class AIService:
 
     def contact(self) -> AIResponse:
         return self.complete(
-            prompt="Reply with one short sentence confirming the AI service is reachable.",
-            max_tokens=80,
+            prompt="Say exactly: AI service reachable.",
+            temperature=0,
+            max_tokens=300,
         )
+
+    def list_models(self) -> list[str]:
+        models = self.client.models.list()
+        return [model.id for model in models.data]
 
 
 def ai_status() -> dict[str, Any]:

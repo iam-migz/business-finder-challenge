@@ -7,6 +7,11 @@ from sqlalchemy import asc, case, desc, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models import BusinessCategory, BusinessListing, ScrapeRun
+from app.services.recommendations import (
+    BusinessIndicatorContext,
+    load_business_indicator_context,
+    recommend_listing,
+)
 from app.services.scraper import ScrapeResult, ScrapedListing
 
 
@@ -80,7 +85,8 @@ def get_listing(db: Session, seek_id: int) -> dict[str, Any] | None:
     listing = db.get(BusinessListing, seek_id)
     if not listing:
         return None
-    return listing_to_dict(listing, include_raw=True)
+    context = load_business_indicator_context(db)
+    return listing_to_dict(listing, include_raw=True, recommendation_context=context)
 
 
 def list_listings(
@@ -132,12 +138,16 @@ def list_listings(
 
     rows = db.scalars(statement).all()
     total = db.scalar(count_statement) or 0
+    recommendation_context = load_business_indicator_context(db)
     return {
         "count": len(rows),
         "total": total,
         "limit": limit,
         "offset": offset,
-        "data": [listing_to_dict(row) for row in rows],
+        "data": [
+            listing_to_dict(row, recommendation_context=recommendation_context)
+            for row in rows
+        ],
     }
 
 
@@ -236,8 +246,17 @@ def _listing_values(scraped_listing: ScrapedListing) -> dict[str, Any]:
 def listing_to_dict(
     listing: BusinessListing,
     include_raw: bool = False,
+    recommendation_context: BusinessIndicatorContext | None = None,
 ) -> dict[str, Any]:
+    recommendation = (
+        recommend_listing(listing, recommendation_context)
+        if recommendation_context
+        else None
+    )
     data = {
+        "recommendation_score": recommendation.score if recommendation else None,
+        "recommendation_reason": recommendation.reason if recommendation else None,
+        "recommendation_abs_industry": recommendation.abs_industry if recommendation else None,
         "seek_id": listing.seek_id,
         "title": listing.title,
         "url": listing.url,

@@ -43,6 +43,7 @@ POST /abs/scrape
 GET /abs/releases
 GET /abs/releases/{slug}
 GET /ai/status
+GET /ai/models
 POST /ai/contact
 POST /ai/complete
 ```

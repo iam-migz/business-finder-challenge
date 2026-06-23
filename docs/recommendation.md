@@ -1,3 +1,69 @@
+# Recommendation Strategy
+
+## How it works (implemented)
+
+We scrape **Australian Bureau of Statistics (ABS)** publicly available economic data and feed it to the AI as additional context to generate a recommendation score and a human-readable reason for each business listing or category.
+
+### Data sources we scrape
+
+| ABS Release | Slug | What it provides |
+|---|---|---|
+| Business Indicators Australia | `business-indicators` | Quarterly estimates for company gross operating profits, sales growth, wages, and inventories by industry — available as HTML tables with key statistics and downloadable XLSX/CSV files |
+| Australian Industry | `australian-industry` | Annual industry-level financial performance data including operating profit before tax, EBITDA, sales and service income, wages, and capital expenditure |
+
+The scraper (`api/app/services/abs_scraper.py`) fetches each release page, extracts:
+
+- **Key statistics** — headline figures like profit growth, sales growth, wage pressure, and inventory movement
+- **Tables** — structured data with headers and rows (e.g. industry name → profit, sales, wages values)
+- **Downloads** — links to full XLSX/CSV datasets for deeper analysis
+
+All scraped data is persisted to SQLite via `api/app/services/abs_data.py` in four tables: `abs_releases`, `abs_tables`, `abs_table_rows`, and `abs_downloads`.
+
+### How the AI uses this data
+
+The recommendation pipeline:
+
+1. **Scrape** — Run `POST /abs/scrape` to collect the latest ABS releases and their table data
+2. **Retrieve** — Query `GET /abs/releases/{slug}` to get structured economic data for the relevant industry
+3. **Feed to AI** — Pass the scraped key statistics and table row data as `context` to `POST /ai/complete` alongside a prompt like _"Score this business category based on profitability, demand, and risk"_
+4. **Score + Reason** — The AI (LiteLLM proxy, OpenAI-compatible) returns a numeric score (0–100) and a plain-English explanation grounded in the ABS data
+
+The AI service (`api/app/services/ai.py`) uses the OpenAI SDK configured via environment variables:
+
+```powershell
+$env:OPENAI_API_KEY="your-api-key"
+$env:OPENAI_BASE_URL="https://martial-miracle-critical-history.trycloudflare.com/v1"
+$env:OPENAI_MODEL="smart"
+```
+
+### Architecture
+
+```
+ABS website ──(scraper)──> SQLite (abs_releases / abs_tables / abs_table_rows)
+                                      │
+                              (context: key_statistics + table rows)
+                                      │
+SEEK listings ──(scraper)──> SQLite (business_listings)
+                                      │
+                              (listing data: price, category, location, summary)
+                                      │
+                                      ▼
+                              POST /ai/complete
+                              { prompt, context }
+                                      │
+                                      ▼
+                            AI Response
+                            { score: 82, reason: "Stable B2B demand, lower capital...", risks: [...] }
+```
+
+The AI returns both a **score** and a **reason** grounded in the real ABS data, not just generic advice.
+
+---
+
+## Theoretical scoring model
+
+Below is the detailed scoring framework the AI uses as guidance.
+
 1. First, define what we are recommending
 
 We are not recommending one exact listing yet. We are recommending a business category or opportunity type, for example:

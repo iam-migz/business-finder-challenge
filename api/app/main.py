@@ -72,6 +72,16 @@ def ai_contact() -> dict[str, object]:
     }
 
 
+@app.get("/ai/models")
+def ai_models() -> dict[str, object]:
+    try:
+        models = create_ai_service().list_models()
+    except Exception as exc:
+        return ai_error_response(exc)
+
+    return {"ok": True, "data": models}
+
+
 @app.post("/ai/complete")
 def ai_complete(request: AICompletionRequest) -> dict[str, object]:
     try:
